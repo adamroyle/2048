@@ -32,7 +32,6 @@ jobs:
 
       - name: Build site
         run: |
-          cd app
           gleam run -m lustre/dev -- build app --minify
           # TODO: remove once Lustre dev tools have a way to build deploy ready code
           cat index.html | sed 's|priv/static/app.css|app.min.css|' | sed 's|priv/static/app.mjs|app.min.mjs|' > priv/static/index.html
