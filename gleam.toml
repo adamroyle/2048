@@ -1,4 +1,4 @@
-name = "gleamy_2048"
+name = "app"
 version = "1.0.0"
 target = "javascript"
 runtime = "node"
