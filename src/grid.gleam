@@ -6,7 +6,13 @@ import gleam/result.{is_error}
 import gleam/string
 
 pub opaque type Grid {
-  Grid(inner: List(Cell), next_id: Int, changes: List(Change), score: Int)
+  Grid(
+    inner: List(Cell),
+    next_id: Int,
+    changes: List(Change),
+    score: Int,
+    high_score: Int,
+  )
 }
 
 pub type Coord =
@@ -30,7 +36,7 @@ pub type Direction {
 }
 
 pub fn empty() -> Grid {
-  Grid(inner: [], next_id: 1, changes: [], score: 0)
+  Grid(inner: [], next_id: 1, changes: [], score: 0, high_score: 0)
 }
 
 pub fn new() -> Grid {
@@ -44,6 +50,14 @@ pub fn random_value() -> Int {
     value if value <= 5 -> 4
     _ -> 2
   }
+}
+
+pub fn set_high_score(grid: Grid, score: Int) -> Grid {
+  Grid(..grid, high_score: score)
+}
+
+pub fn get_high_score(grid: Grid) -> Int {
+  grid.high_score
 }
 
 pub fn cell_at(grid: Grid, coord: Coord) -> Result(Cell, Nil) {
@@ -269,11 +283,15 @@ pub fn last_move_distance(grid: Grid, id: Int) -> Int {
 }
 
 fn increment_score(grid: Grid, value: Int) -> Grid {
-  Grid(..grid, score: grid.score + value)
+  Grid(
+    ..grid,
+    score: grid.score + value,
+    high_score: int.max(grid.high_score, grid.score + value),
+  )
 }
 
 pub fn apply_changes(grid: Grid, changes: List(Change)) -> Grid {
-  list.fold(changes, grid, fn(grid, change) {
+  list.fold(changes, Grid(..grid, changes: changes), fn(grid, change) {
     case change {
       Move(cell, _) -> update_cell(grid, cell)
       Merge(cell, _, with) ->
@@ -283,7 +301,6 @@ pub fn apply_changes(grid: Grid, changes: List(Change)) -> Grid {
       Create(cell) -> spawn_at(grid, cell.coord, cell.value)
     }
   })
-  |> fn(grid) { Grid(..grid, changes: changes) }
 }
 
 pub fn get_row(grid: Grid, row: Int) -> List(Cell) {
@@ -307,7 +324,6 @@ pub fn move(grid: Grid, direction: Direction) -> Grid {
     [] -> grid
     _ -> apply_changes(grid, changes) |> spawn(random_value())
   }
-  // let grid = apply_changes(grid, changes)
 }
 
 // pub fn get_moves(grid: Grid, direction: Direction) -> List(Move) {

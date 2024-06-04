@@ -1,13 +1,16 @@
 import gleam/int
 import gleam/list
 import gleam/option
+import gleam/pair
 import gleam/string
 import grid
 import lustre
 import lustre/attribute
-import lustre/effect.{type Effect}
+import lustre/effect.{type Effect, batch}
 import lustre/element
 import lustre/element/html
+
+// MAIN ------------------------------------------------------------------------
 
 pub fn main() {
   let app = lustre.application(init, update, view)
@@ -16,15 +19,23 @@ pub fn main() {
   Nil
 }
 
+// MODEL -----------------------------------------------------------------------
+
 pub type Model =
   grid.Grid
 
 fn init(_flags) -> #(Model, Effect(Msg)) {
-  #(grid.new(), register_document_keydown())
+  #(
+    grid.new(),
+    batch([register_document_keydown(), read_localstorage("high_score")]),
+  )
 }
+
+// UPDATE ----------------------------------------------------------------------
 
 pub type Msg {
   UserPressedKey(String)
+  HighScoreRead(Result(String, Nil))
 }
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
@@ -37,27 +48,54 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         "ArrowRight" -> grid.move(model, grid.Right)
         _ -> model
       }
+      |> pair.new(write_localstorage(
+        "high_score",
+        grid.get_high_score(model) |> int.to_string,
+      ))
     }
+    HighScoreRead(Ok(value)) -> {
+      case int.parse(value) {
+        Ok(value) -> grid.set_high_score(model, value)
+        Error(_) -> model
+      }
+      |> pair.new(effect.none())
+    }
+    _ -> model |> pair.new(effect.none())
   }
-  |> fn(model) { #(model, effect.none()) }
-}
-
-fn msg_for_key(key: String) -> Msg {
-  UserPressedKey(key)
 }
 
 fn register_document_keydown() -> Effect(Msg) {
   effect.from(fn(dispatch) {
-    do_register_document_keydown(fn(key) {
-      key
-      |> msg_for_key
-      |> dispatch
-    })
+    do_register_document_keydown(fn(key) { dispatch(UserPressedKey(key)) })
   })
 }
 
 @external(javascript, "./app.ffi.mjs", "register_document_keydown")
 fn do_register_document_keydown(func: fn(String) -> Nil) -> Nil
+
+fn read_localstorage(key: String) -> Effect(Msg) {
+  effect.from(fn(dispatch) {
+    do_read_localstorage(key)
+    |> HighScoreRead
+    |> dispatch
+  })
+}
+
+@external(javascript, "./app.ffi.mjs", "read_localstorage")
+fn do_read_localstorage(_key: String) -> Result(String, Nil) {
+  Error(Nil)
+}
+
+fn write_localstorage(key: String, value: String) -> Effect(msg) {
+  effect.from(fn(_) { do_write_localstorage(key, value) })
+}
+
+@external(javascript, "./app.ffi.mjs", "write_localstorage")
+fn do_write_localstorage(_key: String, _value: String) -> Nil {
+  Nil
+}
+
+// VIEW ------------------------------------------------------------------------
 
 pub fn view(model: Model) -> element.Element(Msg) {
   html.div([], [
@@ -72,16 +110,38 @@ pub fn view(model: Model) -> element.Element(Msg) {
           ],
           [html.text("2048")],
         ),
-        html.div([attribute.class("bg-[#B8ADA1] rounded-md p-4")], [
-          html.div([], [
-            html.div(
-              [attribute.class("text-[#ECE4DB] text-center text-sm font-bold")],
-              [html.text("SCORE")],
-            ),
-            html.div(
-              [attribute.class("text-white text-center text-lg font-bold")],
-              [html.text(grid.score(model) |> int.to_string)],
-            ),
+        html.div([attribute.class("flex gap-2")], [
+          html.div([attribute.class("bg-[#B8ADA1] rounded-md w-20 pt-4")], [
+            html.div([], [
+              html.div(
+                [
+                  attribute.class(
+                    "text-[#ECE4DB] text-center text-sm font-bold",
+                  ),
+                ],
+                [html.text("SCORE")],
+              ),
+              html.div(
+                [attribute.class("text-white text-center text-lg font-bold")],
+                [html.text(grid.score(model) |> int.to_string)],
+              ),
+            ]),
+          ]),
+          html.div([attribute.class("bg-[#B8ADA1] rounded-md w-20 pt-4")], [
+            html.div([], [
+              html.div(
+                [
+                  attribute.class(
+                    "text-[#ECE4DB] text-center text-sm font-bold",
+                  ),
+                ],
+                [html.text("BEST")],
+              ),
+              html.div(
+                [attribute.class("text-white text-center text-lg font-bold")],
+                [html.text(grid.get_high_score(model) |> int.to_string)],
+              ),
+            ]),
           ]),
         ]),
       ],
